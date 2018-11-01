@@ -1,5 +1,5 @@
 """
-Minut Point API
+Minut Point API.
 """
 
 import logging
