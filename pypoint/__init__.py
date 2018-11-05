@@ -250,3 +250,7 @@ class Device:
     def webhook(self):
         """Returns the webhook id and secret."""
         return self._session.webhook
+
+    def remove_webhook(self):
+        """Remove the session webhook."""
+        return self._session.remove_webhook()
