@@ -119,7 +119,7 @@ class PointSession(OAuth2Session):
         """Remove webhook."""
         if self._webhook.get('hook_id'):
             self._request(
-                MINUT_WEBHOOKS_URL + self._webhook['hook_id'],
+                "{}/{}".format(MINUT_WEBHOOKS_URL, self._webhook['hook_id']),
                 request_type='DELETE',
             )
 
