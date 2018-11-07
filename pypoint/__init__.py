@@ -17,11 +17,24 @@ MINUT_WEBHOOKS_URL = MINUT_API_URL + "/draft1/webhooks"
 TIMEOUT = timedelta(seconds=10)
 
 EVENTS = {
-    'warm': ('temperature_high', 'temperature_dropped_normal'),
-    'cold': ('temperature_low', 'temperature_risen_normal'),
-    'moisture': ('humidity_high', 'humidity_dropped_normal'),
-    'dry': ('humidity_low', 'humidity_risen_normal'),
-    'connectivity': ('device_offline', 'device_online'),
+    'battery':  # On means low, Off means normal
+    ('battery_low', ''),
+    'button_press':  # On means the button was pressed, Off means normal
+    ('short_button_press', ''),
+    'cold':  # On means cold, Off means normal
+    ('temperature_low', 'temperature_risen_normal'),
+    'connectivity':  # On means connected, Off means disconnected
+    ('device_online', 'device_offline'),
+    'dry':  # On means too dry, Off means normal
+    ('humidity_low', 'humidity_risen_normal'),
+    'heat':  # On means hot, Off means normal
+    ('temperature_high', 'temperature_dropped_normal'),
+    'moisture':  # On means wet, Off means dry
+    ('humidity_high', 'humidity_dropped_normal'),
+    'sound':  # On means sound detected, Off means no sound (clear)
+    ('avg_sound_high', 'sound_level_dropped_normal'),
+    'tamper':  # On means the point was removed or attached
+    ('tamper', ''),
 }
 
 
@@ -134,7 +147,8 @@ class PointSession(OAuth2Session):
         hooks = self._request(MINUT_WEBHOOKS_URL, request_type='GET')['hooks']
         url_hooks = [i['url'] for i in hooks]
         if webhook_url not in url_hooks:
-            events = [i for slist in EVENTS.values() for i in slist]
+            if events is None:
+                events = [i for slist in EVENTS.values() for i in slist]
             self._webhook = self.register_webhook(webhook_url, events)
             _LOGGER.debug("Registered hook: %s", self._webhook)
             return self._webhook
