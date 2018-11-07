@@ -1,6 +1,4 @@
-"""
-Minut Point API.
-"""
+"""Minut Point API."""
 
 import logging
 from datetime import timedelta
@@ -30,13 +28,21 @@ EVENTS = {
 class PointSession(OAuth2Session):
     """Point Session class used by the devices."""
 
-    def __init__(self, client_id, client_secret=None, redirect_uri=None,
-                 auto_refresh_kwargs=None, token=None, token_saver=None):
+    def __init__(self,
+                 client_id,
+                 client_secret=None,
+                 redirect_uri=None,
+                 auto_refresh_kwargs=None,
+                 token=None,
+                 token_saver=None):
         from threading import RLock
-        super().__init__(client_id, auto_refresh_url=MINUT_TOKEN_URL,
-                         redirect_uri=redirect_uri,
-                         auto_refresh_kwargs=auto_refresh_kwargs,
-                         token=token, token_updater=token_saver)
+        super().__init__(
+            client_id,
+            auto_refresh_url=MINUT_TOKEN_URL,
+            redirect_uri=redirect_uri,
+            auto_refresh_kwargs=auto_refresh_kwargs,
+            token=token,
+            token_updater=token_saver)
 
         self._client_id = client_id
         self._client_secret = client_secret
@@ -54,11 +60,12 @@ class PointSession(OAuth2Session):
     def get_access_token(self, code):
         """Get new access token"""
         try:
-            self._token = super().fetch_token(MINUT_TOKEN_URL,
-                                              client_id=self._client_id,
-                                              client_secret=self._client_secret,  # noqa E501
-                                              code=code,
-                                              )
+            self._token = super().fetch_token(
+                MINUT_TOKEN_URL,
+                client_id=self._client_id,
+                client_secret=self._client_secret,
+                code=code,
+            )
         # except Exception as e:
         except MissingTokenError as error:
             _LOGGER.debug("Token issues: %s", error)
@@ -68,14 +75,11 @@ class PointSession(OAuth2Session):
         """Send a request to the Minut Point API."""
         try:
             _LOGGER.debug('Request %s %s', url, params)
-            response = self.request(request_type, url,
-                                    timeout=TIMEOUT.seconds,
-                                    **params)
+            response = self.request(
+                request_type, url, timeout=TIMEOUT.seconds, **params)
             response.raise_for_status()
-            _LOGGER.debug('Response %s %s %.200s',
-                          response.status_code,
-                          response.headers['content-type'],
-                          response.json())
+            _LOGGER.debug('Response %s %s %.200s', response.status_code,
+                          response.headers['content-type'], response.json())
             response = response.json()
             if 'error' in response:
                 raise OSError(response['error'])
@@ -92,8 +96,7 @@ class PointSession(OAuth2Session):
         """Returns sensor value based on sensor_uri."""
         url = MINUT_DEVICES_URL + "/{device_id}/{sensor_uri}".format(
             device_id=device_id, sensor_uri=sensor_uri)
-        res = self._request(url, request_type='GET',
-                            data={'limit': 1})
+        res = self._request(url, request_type='GET', data={'limit': 1})
         return res.get('values')[-1].get('value')
 
     @property
@@ -107,12 +110,14 @@ class PointSession(OAuth2Session):
 
     def register_webhook(self, webhook_url, events):
         """Registering webhook."""
-        response = self._request(MINUT_WEBHOOKS_URL,
-                                 request_type='POST',
-                                 json={'url': webhook_url,
-                                       'events': events,
-                                       }
-                                 )
+        response = self._request(
+            MINUT_WEBHOOKS_URL,
+            request_type='POST',
+            json={
+                'url': webhook_url,
+                'events': events,
+            },
+        )
         return response
 
     def remove_webhook(self):
@@ -130,8 +135,7 @@ class PointSession(OAuth2Session):
         url_hooks = [i['url'] for i in hooks]
         if webhook_url not in url_hooks:
             events = [i for slist in EVENTS.values() for i in slist]
-            self._webhook = self.register_webhook(webhook_url,
-                                                  events)
+            self._webhook = self.register_webhook(webhook_url, events)
             _LOGGER.debug("Registered hook: %s", self._webhook)
             return self._webhook
 
@@ -146,8 +150,10 @@ class PointSession(OAuth2Session):
             devices = self._request_devices()
 
             if devices:
-                self._state = {device['device_id']: device
-                               for device in devices}
+                self._state = {
+                    device['device_id']: device
+                    for device in devices
+                }
                 _LOGGER.debug("Found devices: %s", list(self._state.keys()))
                 # _LOGGER.debug("Device status: %s", devices)
             return self.devices
@@ -186,8 +192,8 @@ class Device:
         """String representaion of device."""
         return ('Device #{id} {name}').format(
             id=self.device_id,
-            name=self.name or ""
-            )
+            name=self.name or "",
+        )
 
     def sensor(self, sensor_type):
         """Reads and returns sensor value."""

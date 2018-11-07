@@ -21,6 +21,6 @@ setuptools.setup(
     install_requires=[
         'requests-oauthlib',
         'oauthlib',
-        'requests'
+        'requests',
     ],
 )
