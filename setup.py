@@ -1,3 +1,4 @@
+"""Minut Point API."""
 import setuptools
 
 with open("README.md", "r") as fh:

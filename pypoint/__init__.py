@@ -48,6 +48,7 @@ class PointSession(OAuth2Session):
                  auto_refresh_kwargs=None,
                  token=None,
                  token_saver=None):
+        """Initialize the Minut Point Session object."""
         from threading import RLock
         super().__init__(
             client_id,
@@ -67,11 +68,11 @@ class PointSession(OAuth2Session):
 
     @property
     def get_authorization_url(self):
-        """Return the authorization url"""
+        """Return the authorization url."""
         return super().authorization_url(MINUT_AUTH_URL)
 
     def get_access_token(self, code):
-        """Get new access token"""
+        """Get new access token."""
         try:
             self._token = super().fetch_token(
                 MINUT_TOKEN_URL,
@@ -106,7 +107,7 @@ class PointSession(OAuth2Session):
         return res.get('devices') if res else None
 
     def read_sensor(self, device_id, sensor_uri):
-        """Returns sensor value based on sensor_uri."""
+        """Return sensor value based on sensor_uri."""
         url = MINUT_DEVICES_URL + "/{device_id}/{sensor_uri}".format(
             device_id=device_id, sensor_uri=sensor_uri)
         res = self._request(url, request_type='GET', data={'limit': 1})
@@ -114,15 +115,15 @@ class PointSession(OAuth2Session):
 
     @property
     def is_authorized(self):
-        """Returns authorized status."""
+        """Return authorized status."""
         return super().authorized
 
     def user(self):
-        """Updates and returns the user data."""
+        """Update and returns the user data."""
         return self._request(MINUT_USERS_URL)
 
-    def register_webhook(self, webhook_url, events):
-        """Registering webhook."""
+    def _register_webhook(self, webhook_url, events):
+        """Register webhook."""
         response = self._request(
             MINUT_WEBHOOKS_URL,
             request_type='POST',
@@ -149,17 +150,17 @@ class PointSession(OAuth2Session):
         if webhook_url not in url_hooks:
             if events is None:
                 events = [i for slist in EVENTS.values() for i in slist]
-            self._webhook = self.register_webhook(webhook_url, events)
+            self._webhook = self._register_webhook(webhook_url, events)
             _LOGGER.debug("Registered hook: %s", self._webhook)
             return self._webhook
 
     @property
     def webhook(self):
-        """Returns the webhook id and secret."""
+        """Return the webhook id and secret."""
         return self._webhook['hook_id']
 
     def update(self):
-        """Updates all devices from server."""
+        """Update all devices from server."""
         with self._lock:
             devices = self._request_devices()
 
@@ -199,18 +200,19 @@ class Device:
     """Point device."""
 
     def __init__(self, session, device_id):
+        """Initialize the Minut Point Device object."""
         self._session = session
         self._device_id = device_id
 
     def __str__(self):
-        """String representaion of device."""
+        """Representaion of device."""
         return ('Device #{id} {name}').format(
             id=self.device_id,
             name=self.name or "",
         )
 
     def sensor(self, sensor_type):
-        """Reads and returns sensor value."""
+        """Update and return sensor value."""
         _LOGGER.debug("Reading %s sensor.", sensor_type)
         return self._session.read_sensor(self.device_id, sensor_type)
 
@@ -258,7 +260,7 @@ class Device:
 
     @property
     def device_status(self):
-        """Current status of device."""
+        """Status of device."""
         return {
             'active': self.device['active'],
             'offline': self.device['offline'],
@@ -268,7 +270,7 @@ class Device:
 
     @property
     def webhook(self):
-        """Returns the webhook id and secret."""
+        """Return the webhook id and secret."""
         return self._session.webhook
 
     def remove_webhook(self):
