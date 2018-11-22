@@ -149,7 +149,7 @@ class PointSession(OAuth2Session):
         url_hooks = [i['url'] for i in hooks]
         if webhook_url not in url_hooks:
             if events is None:
-                events = [i for slist in EVENTS.values() for i in slist]
+                events = [e for v in EVENTS.values() for e in v if e]
             self._webhook = self._register_webhook(webhook_url, events)
             _LOGGER.debug("Registered hook: %s", self._webhook)
             return self._webhook
