@@ -13,6 +13,7 @@ MINUT_DEVICES_URL = MINUT_API_URL + "/v1/devices"
 MINUT_USERS_URL = MINUT_API_URL + "/v1/users"
 MINUT_TOKEN_URL = MINUT_API_URL + "/v1/oauth/token"
 MINUT_WEBHOOKS_URL = MINUT_API_URL + "/draft1/webhooks"
+MINUT_HOMES_URL = MINUT_API_URL + "/v1/homes"
 
 TIMEOUT = timedelta(seconds=10)
 
@@ -64,6 +65,7 @@ class PointSession(OAuth2Session):
         self._user = None
         self._webhook = {}
         self._state = {}
+        self._homes = {}
         self._lock = RLock()
 
     @property
@@ -101,10 +103,10 @@ class PointSession(OAuth2Session):
         except OSError as error:
             _LOGGER.warning('Failed request: %s', error)
 
-    def _request_devices(self):
+    def _request_devices(self, url, _type):
         """Request list of devices."""
-        res = self._request(MINUT_DEVICES_URL)
-        return res.get('devices') if res else None
+        res = self._request(url)
+        return res.get(_type) if res else {}
 
     def read_sensor(self, device_id, sensor_uri):
         """Return sensor value based on sensor_uri."""
@@ -166,7 +168,7 @@ class PointSession(OAuth2Session):
     def update(self):
         """Update all devices from server."""
         with self._lock:
-            devices = self._request_devices()
+            devices = self._request_devices(MINUT_DEVICES_URL, 'devices')
 
             if devices:
                 self._state = {
@@ -175,7 +177,29 @@ class PointSession(OAuth2Session):
                 }
                 _LOGGER.debug("Found devices: %s", list(self._state.keys()))
                 # _LOGGER.debug("Device status: %s", devices)
+            self._homes = self._request_devices(MINUT_HOMES_URL, 'homes')
             return self.devices
+
+    @property
+    def homes(self):
+        """Return all known homes."""
+        return {home['home_id']: home for home in self._homes}
+
+    def _set_alarm(self, status, home_id):
+        """Set alarm satus."""
+        response = self._request(
+            MINUT_HOMES_URL + "/{}".format(home_id),
+            request_type='PUT',
+            json={'alarm_status': status})
+        return response.get('alarm_status', '') == status
+
+    def alarm_arm(self, home_id):
+        """Arm alarm."""
+        return self._set_alarm('on', home_id)
+
+    def alarm_disarm(self, home_id):
+        """Disarm alarm."""
+        return self._set_alarm('off', home_id)
 
     @property
     def devices(self):
