@@ -146,10 +146,12 @@ class PointSession(OAuth2Session):
 
     def update_webhook(self, webhook_url, webhook_id, events=None):
         """Register webhook (if it doesn't exit)."""
-        self._webhook['hook_id'] = webhook_id
         hooks = self._request(MINUT_WEBHOOKS_URL, request_type='GET')['hooks']
-        url_hooks = [i['url'] for i in hooks]
-        if webhook_url not in url_hooks:
+        try:
+            self._webhook = next(
+                hook for hook in hooks if hook['url'] == webhook_url)
+            _LOGGER.debug("Webhook: %s", self._webhook)
+        except StopIteration:  # Not found
             if events is None:
                 events = [e for v in EVENTS.values() for e in v if e]
             self._webhook = self._register_webhook(webhook_url, events)
