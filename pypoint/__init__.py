@@ -177,13 +177,18 @@ class PointSession(OAuth2Session):
                 }
                 _LOGGER.debug("Found devices: %s", list(self._state.keys()))
                 # _LOGGER.debug("Device status: %s", devices)
-            self._homes = self._request_devices(MINUT_HOMES_URL, 'homes')
+            homes = self._request_devices(MINUT_HOMES_URL, 'homes')
+            if homes:
+                self._homes = homes
             return self.devices
 
     @property
     def homes(self):
         """Return all known homes."""
-        return {home['home_id']: home for home in self._homes}
+        return {
+            home['home_id']: home
+            for home in self._homes if 'alarm_status' in home.keys()
+        }
 
     def _set_alarm(self, status, home_id):
         """Set alarm satus."""
