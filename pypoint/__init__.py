@@ -124,7 +124,7 @@ class PointSession(OAuth2Session):
 
     def user(self):
         """Update and returns the user data."""
-        return self._request(MINUT_USERS_URL)
+        return self._request(MINUT_USERS_URL + "/" + self._token['user_id'])
 
     def _register_webhook(self, webhook_url, events):
         """Register webhook."""
