@@ -2,9 +2,10 @@
 
 from datetime import timedelta
 import logging
+from threading import RLock
 
-from oauthlib.oauth2.rfc6749.errors import MissingTokenError
-from requests_oauthlib import OAuth2Session
+from authlib.integrations.httpx_client import AsyncOAuth2Client
+from authlib.oauth2.rfc6749.errors import MissingTokenException
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,63 +53,65 @@ EVENTS = {
 }
 
 
-class PointSession(OAuth2Session):
+class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attributes
     """Point Session class used by the devices."""
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
+        session,
         client_id,
-        client_secret=None,
+        client_secret,
         redirect_uri=None,
-        auto_refresh_kwargs=None,
         token=None,
         token_saver=None,
     ):
         """Initialize the Minut Point Session object."""
-        from threading import RLock
-
         super().__init__(
             client_id,
+            client_secret,
             auto_refresh_url=MINUT_TOKEN_URL,
             redirect_uri=redirect_uri,
-            auto_refresh_kwargs=auto_refresh_kwargs,
+            token_endpoint_auth_method="client_secret_basic",
             token=token,
-            token_updater=token_saver,
         )
-
-        self._client_id = client_id
-        self._client_secret = client_secret
-        self._token = token
+        self.session = session
         self._user = None
         self._webhook = {}
-        self._state = {}
+        self._device_state = {}
         self._homes = {}
         self._lock = RLock()
+        self.update_token = token_saver
+        self.metadata = {"token_endpoint": MINUT_TOKEN_URL}
 
     @property
     def get_authorization_url(self):
         """Return the authorization url."""
-        return super().authorization_url(MINUT_AUTH_URL)
+        return self.create_authorization_url(MINUT_AUTH_URL)[0]
 
-    def get_access_token(self, code):
+    @property
+    def is_authorized(self):
+        """Return authorized status."""
+        return bool(self.token["access_token"])
+
+    async def get_access_token(self, code):
         """Get new access token."""
         try:
-            self._token = super().fetch_token(
+            await super().fetch_token(
                 MINUT_TOKEN_URL,
-                client_id=self._client_id,
-                client_secret=self._client_secret,
+                client_id=self.client_id,
+                client_secret=self.client_secret,
+                grant_type="authorization_code",
                 code=code,
             )
-        # except Exception as e:
-        except MissingTokenError as error:
-            _LOGGER.debug("Token issues: %s", error)
-        return self._token
+        except MissingTokenException as error:
+            _LOGGER.warning("Token issues: %s", error)
+        return self.token
 
-    def _request(self, url, request_type="GET", **params):
+    async def _request(self, url, request_type="GET", **params):
         """Send a request to the Minut Point API."""
         try:
             _LOGGER.debug("Request %s %s", url, params)
-            response = self.request(
+            response = await self.request(
                 request_type, url, timeout=TIMEOUT.seconds, **params
             )
             response.raise_for_status()
@@ -125,33 +128,30 @@ class PointSession(OAuth2Session):
         except OSError as error:
             _LOGGER.warning("Failed request: %s", error)
 
-    def _request_devices(self, url, _type):
+    async def _request_devices(self, url, _type):
         """Request list of devices."""
-        res = self._request(url)
+        res = await self._request(url)
         return res.get(_type) if res else {}
 
-    def read_sensor(self, device_id, sensor_uri):
+    async def read_sensor(self, device_id, sensor_uri):
         """Return sensor value based on sensor_uri."""
         url = MINUT_DEVICES_URL + "/{device_id}/{sensor_uri}".format(
             device_id=device_id, sensor_uri=sensor_uri
         )
-        res = self._request(url, request_type="GET", data={"limit": 1})
+        res = await self._request(url, request_type="GET", data={"limit": 1})
         if not res or not res.get("values"):
             return None
         return res.get("values")[-1].get("value")
 
-    @property
-    def is_authorized(self):
-        """Return authorized status."""
-        return super().authorized
-
-    def user(self):
+    async def user(self):
         """Update and returns the user data."""
-        return self._request(MINUT_USERS_URL + "/{}".format(self._token["user_id"]))
+        return await self._request(
+            MINUT_USERS_URL + "/{}".format(self.token["user_id"])
+        )
 
-    def _register_webhook(self, webhook_url, events):
+    async def _register_webhook(self, webhook_url, events):
         """Register webhook."""
-        response = self._request(
+        response = await self._request(
             MINUT_WEBHOOKS_URL,
             request_type="POST",
             json={
@@ -161,42 +161,42 @@ class PointSession(OAuth2Session):
         )
         return response
 
-    def remove_webhook(self):
+    async def remove_webhook(self):
         """Remove webhook."""
         if self._webhook.get("hook_id"):
-            self._request(
+            await self._request(
                 "{}/{}".format(MINUT_WEBHOOKS_URL, self._webhook["hook_id"]),
                 request_type="DELETE",
             )
 
-    def update_webhook(self, webhook_url, webhook_id, events=None):
+    async def update_webhook(self, webhook_url, webhook_id, events=None):
         """Register webhook (if it doesn't exit)."""
-        hooks = self._request(MINUT_WEBHOOKS_URL, request_type="GET")["hooks"]
+        hooks = (await self._request(MINUT_WEBHOOKS_URL, request_type="GET"))["hooks"]
         try:
             self._webhook = next(hook for hook in hooks if hook["url"] == webhook_url)
-            _LOGGER.debug("Webhook: %s", self._webhook)
+            _LOGGER.debug("Webhook: %s, %s", self._webhook, webhook_id)
         except StopIteration:  # Not found
             if events is None:
                 events = [e for v in EVENTS.values() for e in v if e]
-            self._webhook = self._register_webhook(webhook_url, events)
+            self._webhook = await self._register_webhook(webhook_url, events)
             _LOGGER.debug("Registered hook: %s", self._webhook)
             return self._webhook
 
     @property
     def webhook(self):
         """Return the webhook id and secret."""
-        return self._webhook["hook_id"]
+        return self._webhook.get("hook_id")
 
-    def update(self):
+    async def update(self):
         """Update all devices from server."""
         with self._lock:
-            devices = self._request_devices(MINUT_DEVICES_URL, "devices")
+            devices = await self._request_devices(MINUT_DEVICES_URL, "devices")
 
             if devices:
-                self._state = {device["device_id"]: device for device in devices}
-                _LOGGER.debug("Found devices: %s", list(self._state.keys()))
+                self._device_state = {device["device_id"]: device for device in devices}
+                _LOGGER.debug("Found devices: %s", list(self._device_state.keys()))
                 # _LOGGER.debug("Device status: %s", devices)
-            homes = self._request_devices(MINUT_HOMES_URL, "homes")
+            homes = await self._request_devices(MINUT_HOMES_URL, "homes")
             if homes:
                 self._homes = homes
             return self.devices
@@ -210,22 +210,22 @@ class PointSession(OAuth2Session):
             if "alarm_status" in home.keys()
         }
 
-    def _set_alarm(self, status, home_id):
+    async def _set_alarm(self, status, home_id):
         """Set alarm satus."""
-        response = self._request(
+        response = await self._request(
             MINUT_HOMES_URL + "/{}".format(home_id),
             request_type="PUT",
             json={"alarm_status": status},
         )
         return response.get("alarm_status", "") == status
 
-    def alarm_arm(self, home_id):
+    async def alarm_arm(self, home_id):
         """Arm alarm."""
-        return self._set_alarm("on", home_id)
+        return await self._set_alarm("on", home_id)
 
-    def alarm_disarm(self, home_id):
+    async def alarm_disarm(self, home_id):
         """Disarm alarm."""
-        return self._set_alarm("off", home_id)
+        return await self._set_alarm("off", home_id)
 
     @property
     def devices(self):
@@ -242,12 +242,12 @@ class PointSession(OAuth2Session):
     def device_ids(self):
         """List of known device ids."""
         with self._lock:
-            return self._state.keys()
+            return self._device_state.keys()
 
     def device_raw(self, device_id):
         """Return the raw representaion of a device."""
         with self._lock:
-            return self._state.get(device_id)
+            return self._device_state.get(device_id)
 
 
 class Device:
@@ -265,10 +265,10 @@ class Device:
             name=self.name or "",
         )
 
-    def sensor(self, sensor_type):
+    async def sensor(self, sensor_type):
         """Update and return sensor value."""
         _LOGGER.debug("Reading %s sensor.", sensor_type)
-        return self._session.read_sensor(self.device_id, sensor_type)
+        return await self._session.read_sensor(self.device_id, sensor_type)
 
     @property
     def device(self):
@@ -327,6 +327,6 @@ class Device:
         """Return the webhook id and secret."""
         return self._session.webhook
 
-    def remove_webhook(self):
+    async def remove_webhook(self):
         """Remove the session webhook."""
-        return self._session.remove_webhook()
+        return await self._session.remove_webhook()
