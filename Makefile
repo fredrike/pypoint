@@ -12,6 +12,7 @@ black:
 
 lint: requirements.txt setup.py
 	flake8
+	pylint pypoint
 
 check: format lint
 
