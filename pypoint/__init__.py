@@ -6,6 +6,7 @@ from threading import RLock
 
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from authlib.oauth2.rfc6749.errors import MissingTokenException
+from httpx import TimeoutException, NetworkError, HTTPError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,10 +124,14 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
             )
             response = response.json()
             if "error" in response:
-                raise OSError(response["error"])
+                raise HTTPError(response["error"], request=url)
             return response
-        except OSError as error:
-            _LOGGER.warning("Failed request: %s", error)
+        except NetworkError as error:
+            _LOGGER.error("Network issue: %s", error)
+        except TimeoutException as error:
+            _LOGGER.error("Timeout issue: %s", error)
+        except HTTPError as error:
+            _LOGGER.error("Failed request: %s", error)
 
     async def _request_devices(self, url, _type):
         """Request list of devices."""
@@ -195,11 +200,10 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
             if devices:
                 self._device_state = {device["device_id"]: device for device in devices}
                 _LOGGER.debug("Found devices: %s", list(self._device_state.keys()))
-                # _LOGGER.debug("Device status: %s", devices)
-            homes = await self._request_devices(MINUT_HOMES_URL, "homes")
-            if homes:
-                self._homes = homes
-            return self.devices
+                homes = await self._request_devices(MINUT_HOMES_URL, "homes")
+                if homes:
+                    self._homes = homes
+            return devices
 
     @property
     def homes(self):
