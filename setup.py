@@ -20,8 +20,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        "requests-oauthlib",
-        "oauthlib",
-        "requests",
+        "authlib",
     ],
 )
