@@ -6,7 +6,7 @@ from threading import RLock
 
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from authlib.oauth2.rfc6749.errors import MissingTokenException
-from httpx import TimeoutException, NetworkError, HTTPError
+from httpx import HTTPError, NetworkError, TimeoutException
 
 _LOGGER = logging.getLogger(__name__)
 
