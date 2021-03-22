@@ -117,10 +117,12 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
             )
             response.raise_for_status()
             _LOGGER.debug(
-                "Response %s %s %.200s",
+                "Response %s %s %s",
                 response.status_code,
                 response.headers["content-type"],
-                response.json(),
+                response.json().get("values")[-1]
+                if params.get("data")
+                else response.json(),
             )
             response = response.json()
             if "error" in response:
