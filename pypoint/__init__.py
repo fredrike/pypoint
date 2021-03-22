@@ -21,6 +21,10 @@ MINUT_HOMES_URL = MINUT_API_URL + "/v1/homes"
 TIMEOUT = timedelta(seconds=10)
 
 EVENTS = {
+    "alarm": (  # On means alarm sound was recognised, Off means normal
+        "alarm_heard",
+        "alarm_silenced",
+    ),
     "battery": ("battery_low", ""),  # On means low, Off means normal
     "button_press": (  # On means the button was pressed, Off means normal
         "short_button_press",
@@ -38,6 +42,7 @@ EVENTS = {
         "humidity_low",
         "humidity_risen_normal",
     ),
+    "glass": ("glassbreak", ""),  # The sound of glass break was detected
     "heat": (  # On means hot, Off means normal
         "temperature_high",
         "temperature_dropped_normal",
@@ -46,11 +51,23 @@ EVENTS = {
         "humidity_high",
         "humidity_dropped_normal",
     ),
+    "motion": (  # On means motion detected, Off means no motion (clear)
+        "pir_motion",
+        "",
+    ),
+    "noise": (
+        "disturbance_first_notice",  # The first alert of the noise monitoring
+        "disturbance_ended",  # Created when the noise levels have gone back to normal
+    ),
     "sound": (  # On means sound detected, Off means no sound (clear)
         "avg_sound_high",
         "sound_level_dropped_normal",
     ),
-    "tamper": ("tamper", ""),  # On means the point was removed or attached
+    "tamper_old": ("tamper", ""),  # On means the point was removed or attached
+    "tamper": (
+        "tamper_removed",  # Minut was mounted on the mounting plate (newer devices only)
+        "tamper_mounted",  # Minute was removed from the mounting plate (newer devices only)
+    ),
 }
 
 
@@ -117,10 +134,12 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
             )
             response.raise_for_status()
             _LOGGER.debug(
-                "Response %s %s %.200s",
+                "Response %s %s %s",
                 response.status_code,
                 response.headers["content-type"],
-                response.json(),
+                response.json().get("values")[-1]
+                if params.get("data")
+                else response.json(),
             )
             response = response.json()
             if "error" in response:
