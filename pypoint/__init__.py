@@ -159,9 +159,7 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
 
     async def read_sensor(self, device_id, sensor_uri):
         """Return sensor value based on sensor_uri."""
-        url = MINUT_DEVICES_URL + "/{device_id}/{sensor_uri}".format(
-            device_id=device_id, sensor_uri=sensor_uri
-        )
+        url = f"{MINUT_DEVICES_URL}/{device_id}/{sensor_uri}"
         res = await self._request(url, request_type="GET", data={"limit": 1})
         if not res or not res.get("values"):
             return None
@@ -169,9 +167,7 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
 
     async def user(self):
         """Update and returns the user data."""
-        return await self._request(
-            MINUT_USERS_URL + "/{}".format(self.token["user_id"])
-        )
+        return await self._request(f"{MINUT_USERS_URL}/{self.token['user_id']}")
 
     async def _register_webhook(self, webhook_url, events):
         """Register webhook."""
@@ -189,7 +185,7 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
         """Remove webhook."""
         if self._webhook.get("hook_id"):
             await self._request(
-                "{}/{}".format(MINUT_WEBHOOKS_URL, self._webhook["hook_id"]),
+                f"{MINUT_WEBHOOKS_URL}/{self._webhook['hook_id']}",
                 request_type="DELETE",
             )
 
@@ -236,7 +232,7 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
     async def _set_alarm(self, status, home_id):
         """Set alarm satus."""
         response = await self._request(
-            MINUT_HOMES_URL + "/{}".format(home_id),
+            f"{MINUT_HOMES_URL}/{home_id}",
             request_type="PUT",
             json={"alarm_status": status},
         )
@@ -283,10 +279,7 @@ class Device:
 
     def __str__(self):
         """Representaion of device."""
-        return ("Device #{id} {name}").format(
-            id=self.device_id,
-            name=self.name or "",
-        )
+        return f"Device #{self.device_id} {self.name or ''}"
 
     async def sensor(self, sensor_type):
         """Update and return sensor value."""
@@ -330,7 +323,7 @@ class Device:
             "connections": {("mac", self.device["device_mac"])},
             "identifieres": self.device["device_id"],
             "manufacturer": "Minut",
-            "model": "Point v{}".format(self.device["hardware_version"]),
+            "model": f"Point v{self.device['hardware_version']}",
             "name": self.device["description"],
             "sw_version": self.device["firmware"]["installed"],
         }
