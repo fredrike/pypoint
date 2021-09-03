@@ -138,7 +138,7 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
                 response.status_code,
                 response.headers["content-type"],
                 response.json().get("values")[-1]
-                if params.get("data")
+                if params.get("data") and response.json().get("values")
                 else response.json(),
             )
             response = response.json()
