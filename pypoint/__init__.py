@@ -11,12 +11,12 @@ from httpx import HTTPError, NetworkError, TimeoutException
 _LOGGER = logging.getLogger(__name__)
 
 MINUT_API_URL = "https://api.minut.com"
-MINUT_AUTH_URL = MINUT_API_URL + "/v1/oauth/authorize"
-MINUT_DEVICES_URL = MINUT_API_URL + "/v1/devices"
-MINUT_USERS_URL = MINUT_API_URL + "/v1/users"
-MINUT_TOKEN_URL = MINUT_API_URL + "/v1/oauth/token"
-MINUT_WEBHOOKS_URL = MINUT_API_URL + "/draft1/webhooks"
-MINUT_HOMES_URL = MINUT_API_URL + "/v1/homes"
+MINUT_AUTH_URL = MINUT_API_URL + "/v5/oauth/authorize"
+MINUT_DEVICES_URL = MINUT_API_URL + "/v5/devices"
+MINUT_USERS_URL = MINUT_API_URL + "/v5/users"
+MINUT_TOKEN_URL = MINUT_API_URL + "/v5/oauth/token"
+MINUT_WEBHOOKS_URL = MINUT_API_URL + "/v5/webhooks"
+MINUT_HOMES_URL = MINUT_API_URL + "/v5/homes"
 
 TIMEOUT = timedelta(seconds=10)
 
