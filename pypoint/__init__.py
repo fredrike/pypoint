@@ -6,7 +6,7 @@ from threading import RLock
 
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from authlib.oauth2.rfc6749.errors import MissingTokenException
-from httpx import HTTPError, NetworkError, TimeoutException
+from httpx import HTTPError, NetworkError, RequestError, TimeoutException
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
             )
             response = response.json()
             if "error" in response:
-                raise HTTPError(response["error"], request=url)
+                raise RequestError(response["error"], request=url)
             return response
         except NetworkError as error:
             _LOGGER.error("Network issue: %s", error)
