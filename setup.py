@@ -21,5 +21,6 @@ setuptools.setup(
     ],
     install_requires=[
         "authlib",
+        "httpx==0.19.0",
     ],
 )
