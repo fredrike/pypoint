@@ -18,6 +18,14 @@ MINUT_TOKEN_URL = MINUT_API_URL + "/v5/oauth/token"
 MINUT_WEBHOOKS_URL = MINUT_API_URL + "/v5/webhooks"
 MINUT_HOMES_URL = MINUT_API_URL + "/v5/homes"
 
+INTERNAL_SENSORS = {
+    "temperature",
+    "sound",
+    "pressure",
+    "humidity",
+    "accelerometer_x",
+}
+
 TIMEOUT = timedelta(seconds=10)
 
 EVENTS = {
@@ -160,6 +168,13 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
 
     async def read_sensor(self, device_id, sensor_uri):
         """Return sensor value based on sensor_uri."""
+        if sensor_uri in INTERNAL_SENSORS and device_id in self._device_state:
+            _LOGGER.info(
+                self._device_state[device_id]["latest_sensor_values"][sensor_uri]
+            )
+            return self._device_state[device_id]["latest_sensor_values"][sensor_uri][
+                "value"
+            ]
         url = MINUT_DEVICES_URL + "/{device_id}/{sensor_uri}".format(
             device_id=device_id, sensor_uri=sensor_uri
         )
