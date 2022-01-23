@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pypoint",
-    version="2.2.1",
+    version="2.3.0",
     author="Fredrik Erlandsson",
     author_email="fredrik.e@gmail.com",
     description="API for Minut Point",
