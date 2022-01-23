@@ -133,7 +133,8 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
                 request_type, url, timeout=TIMEOUT.seconds, **params
             )
             response.raise_for_status()
-            _LOGGER.debug(
+            _LOGGER.log(
+                logging.NOTSET,
                 "Response %s %s %s",
                 response.status_code,
                 response.headers["content-type"],
@@ -218,10 +219,20 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
 
             if devices:
                 self._device_state = {device["device_id"]: device for device in devices}
-                _LOGGER.debug("Found devices: %s", list(self._device_state.keys()))
+                _LOGGER.debug(
+                    "Found devices: %s",
+                    [
+                        {k: self._device_state[k]["description"]}
+                        for k in self._device_state
+                    ],
+                )
                 homes = await self._request_devices(MINUT_HOMES_URL, "homes")
                 if homes:
                     self._homes = homes
+                    _LOGGER.debug(
+                        "Found homes: %s",
+                        [{home["home_id"]: home["name"]} for home in self._homes],
+                    )
             return devices
 
     @property
