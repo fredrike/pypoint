@@ -169,12 +169,15 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
     async def read_sensor(self, device_id, sensor_uri):
         """Return sensor value based on sensor_uri."""
         if sensor_uri in INTERNAL_SENSORS and device_id in self._device_state:
-            _LOGGER.info(
-                self._device_state[device_id]["latest_sensor_values"][sensor_uri]
-            )
-            return self._device_state[device_id]["latest_sensor_values"][sensor_uri][
-                "value"
-            ]
+            if "latest_sensor_values" in self._device_state[device_id]:
+                _LOGGER.info(
+                    self._device_state[device_id]["latest_sensor_values"][sensor_uri]
+                )
+                return self._device_state[device_id]["latest_sensor_values"][sensor_uri][
+                    "value"
+                ]
+            else:
+                _LOGGER.debug("Device %s does not have 'latest_sensor_values'!", device_id)
         url = MINUT_DEVICES_URL + f"/{device_id}/{sensor_uri}"
         res = await self._request(url, request_type="GET", data={"limit": 1})
         if not res or not res.get("values"):
