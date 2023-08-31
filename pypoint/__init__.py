@@ -173,11 +173,10 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
                 _LOGGER.info(
                     self._device_state[device_id]["latest_sensor_values"][sensor_uri]
                 )
-                return self._device_state[device_id]["latest_sensor_values"][sensor_uri][
-                    "value"
-                ]
-            else:
-                _LOGGER.debug("Device %s does not have 'latest_sensor_values'!", device_id)
+                return self._device_state[device_id]["latest_sensor_values"][
+                    sensor_uri
+                ]["value"]
+            _LOGGER.debug("Device %s does not have 'latest_sensor_values'!", device_id)
         url = MINUT_DEVICES_URL + f"/{device_id}/{sensor_uri}"
         res = await self._request(url, request_type="GET", data={"limit": 1})
         if not res or not res.get("values"):
@@ -283,7 +282,7 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
     def device(self, device_id):
         """Return a device object."""
         if len(device_id) == 1:
-            raise Exception("ERR FER")
+            raise Exception("ERR FER")  # pylint: disable=broad-exception-raised
         return Device(self, device_id)
 
     @property
