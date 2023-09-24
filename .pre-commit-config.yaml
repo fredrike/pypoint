@@ -15,3 +15,13 @@ repos:
     rev: 5.12.0
     hooks:
       - id: isort
+  - repo: https://github.com/pycqa/pylint
+    rev: v3.0.0a7
+    hooks:
+      - id: pylint
+        additional_dependencies:
+        - authlib
+        - httpx>=0.19.0,<1
+        exclude: 'tests/'
+        args:
+        - --ignore=setup.py

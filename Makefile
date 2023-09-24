@@ -6,19 +6,8 @@ endif
 
 default: check
 
-format: white
-	isort setup.py pypoint/*.py
-
-white: black
-
-black:
-	black . pypoint
-
-lint: requirements.txt setup.py
-	flake8
-	pylint pypoint
-
-check: format lint
+check:
+	pre-commit run --all
 
 clean:
 	rm -f *.pyc
