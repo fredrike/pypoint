@@ -18,12 +18,8 @@ MINUT_TOKEN_URL = MINUT_API_URL + "oauth/token"
 MINUT_WEBHOOKS_URL = MINUT_API_URL + "webhooks"
 MINUT_HOMES_URL = MINUT_API_URL + "homes"
 
-INTERNAL_SENSORS = {
-    "temperature",
-    "sound",
-    "pressure",
-    "humidity",
-    "accelerometer_x",
+MAP_SENSORS = {
+    "sound_pressure": "sound",
 }
 
 TIMEOUT = timedelta(seconds=10)
@@ -168,15 +164,18 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
 
     async def read_sensor(self, device_id, sensor_uri):
         """Return sensor value based on sensor_uri."""
-        if sensor_uri in INTERNAL_SENSORS and device_id in self._device_state:
-            if "latest_sensor_values" in self._device_state[device_id]:
-                _LOGGER.info(
-                    self._device_state[device_id]["latest_sensor_values"][sensor_uri]
-                )
-                return self._device_state[device_id]["latest_sensor_values"][
-                    sensor_uri
-                ]["value"]
-            _LOGGER.debug("Device %s does not have 'latest_sensor_values'!", device_id)
+        sensor_uri = MAP_SENSORS.get(sensor_uri, sensor_uri)
+        if device_id in self._device_state and sensor_uri in self._device_state[
+            device_id
+        ].get("latest_sensor_values", {}):
+            _LOGGER.debug(
+                "Cached sensor value for %s: %s",
+                sensor_uri,
+                self._device_state[device_id]["latest_sensor_values"][sensor_uri],
+            )
+            return self._device_state[device_id]["latest_sensor_values"][sensor_uri][
+                "value"
+            ]
         url = MINUT_DEVICES_URL + f"/{device_id}/{sensor_uri}"
         res = await self._request(url, request_type="GET", data={"limit": 1})
         if not res or not res.get("values"):
