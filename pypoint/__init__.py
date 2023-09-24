@@ -200,7 +200,7 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
 
     async def remove_webhook(self):
         """Remove webhook."""
-        if self._webhook.get("hook_id"):
+        if self._webhook and self._webhook.get("hook_id"):
             await self._request(
                 f"{MINUT_WEBHOOKS_URL}/{self._webhook['hook_id']}",
                 request_type="DELETE",
