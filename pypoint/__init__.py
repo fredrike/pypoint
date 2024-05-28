@@ -1,131 +1,25 @@
 """Minut Point API."""
 
-from datetime import timedelta
 import logging
-
 from threading import RLock
 
-from aiohttp import ClientResponse, ClientSession
-from aiohttp.client_exceptions import ClientConnectionError,ClientResponseError
+from aiohttp import ClientResponse
+from aiohttp.client_exceptions import ClientResponseError
+
+from .auth import AbstractAuth
+from .const import (
+    EVENTS,
+    MAP_SENSORS,
+    MINUT_DEVICES_URL,
+    MINUT_HOMES_URL,
+    MINUT_USER_URL,
+    MINUT_WEBHOOKS_URL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-MINUT_API_URL = "https://api.minut.com/v8/"
-MINUT_AUTH_URL = MINUT_API_URL + "oauth/authorize"
-MINUT_DEVICES_URL = MINUT_API_URL + "devices"
-MINUT_USERS_URL = MINUT_API_URL + "users"
-MINUT_TOKEN_URL = MINUT_API_URL + "oauth/token"
-MINUT_WEBHOOKS_URL = MINUT_API_URL + "webhooks"
-MINUT_HOMES_URL = MINUT_API_URL + "homes"
 
-MAP_SENSORS = {
-    "sound_pressure": "sound",
-}
-
-TIMEOUT = timedelta(seconds=10)
-
-EVENTS = {
-    "alarm": (  # On means alarm sound was recognised, Off means normal
-        "alarm_heard",
-        "alarm_silenced",
-    ),
-    "battery": ("battery_low", ""),  # On means low, Off means normal
-    "button_press": (  # On means the button was pressed, Off means normal
-        "short_button_press",
-        "",
-    ),
-    "cold": (  # On means cold, Off means normal
-        "temperature_low",
-        "temperature_risen_normal",
-    ),
-    "connectivity": (  # On means connected, Off means disconnected
-        "device_online",
-        "device_offline",
-    ),
-    "dry": (  # On means too dry, Off means normal
-        "humidity_low",
-        "humidity_risen_normal",
-    ),
-    "glass": ("glassbreak", ""),  # The sound of glass break was detected
-    "heat": (  # On means hot, Off means normal
-        "temperature_high",
-        "temperature_dropped_normal",
-    ),
-    "moisture": (  # On means wet, Off means dry
-        "humidity_high",
-        "humidity_dropped_normal",
-    ),
-    "motion": (  # On means motion detected, Off means no motion (clear)
-        "pir_motion",
-        "",
-    ),
-    "noise": (
-        "disturbance_first_notice",  # The first alert of the noise monitoring
-        "disturbance_ended",  # Created when the noise levels have gone back to normal
-    ),
-    "sound": (  # On means sound detected, Off means no sound (clear)
-        "avg_sound_high",
-        "sound_level_dropped_normal",
-    ),
-    "tamper_old": ("tamper", ""),  # On means the point was removed or attached
-    "tamper": (
-        "tamper_removed",  # Minut was mounted on the mounting plate (newer devices only)
-        "tamper_mounted",  # Minute was removed from the mounting plate (newer devices only)
-    ),
-}
-
-from abc import ABC, abstractmethod
-from aiohttp import ClientSession, ClientResponse
-
-
-class AbstractAuth(ABC):
-    """Abstract class to make authenticated requests."""
-
-    def __init__(self, websession: ClientSession):
-        """Initialize the auth."""
-        self.websession = websession
-
-
-    @abstractmethod
-    async def async_get_access_token(self) -> str:
-        """Return a valid access token."""
-
-    async def request(self, url, request_type="GET", **kwargs) -> ClientResponse:
-        """Send a request to the Minut Point API."""
-        headers = kwargs.get("headers")
-
-        if headers is None:
-            headers = {}
-        else:
-            headers = dict(headers)
-
-        access_token = await self.async_get_access_token()
-        headers["authorization"] = f"Bearer {access_token}"
-
-        try:
-            _LOGGER.debug("Request %s %s %s", url, kwargs, headers)
-            response = await self.websession.request(
-                request_type, url, **kwargs, timeout=TIMEOUT.seconds, headers=headers
-            )
-            response.raise_for_status()
-            resp = await response.json()
-            _LOGGER.log(
-                logging.NOTSET,
-                "Response %s %s %s",
-                response.status,
-                response.headers["content-type"],
-                resp.get("values")[-1]
-                if kwargs.get("data") and resp.get("values")
-                else response.text,
-            )
-            if "error" in resp:
-                raise RequestError(resp["error"], request=url)
-            return resp
-        except ClientConnectionError as error:
-            _LOGGER.error("Client issue: %s", error)
-
-
-class PointSession():  # pylint: disable=too-many-instance-attributes
+class PointSession:  # pylint: disable=too-many-instance-attributes
     """Point Session class used by the devices."""
 
     def __init__(
@@ -139,7 +33,6 @@ class PointSession():  # pylint: disable=too-many-instance-attributes
         self._device_state = {}
         self._homes = {}
         self._lock = RLock()
-        self.metadata = {"token_endpoint": MINUT_TOKEN_URL}
 
     async def _request_devices(self, url, _type):
         """Request list of devices."""
@@ -168,7 +61,7 @@ class PointSession():  # pylint: disable=too-many-instance-attributes
 
     async def user(self):
         """Update and returns the user data."""
-        return await self.auth.request(f"{MINUT_USERS_URL}/{self.token['user_id']}")
+        return await self.auth.request(MINUT_USER_URL)
 
     async def _register_webhook(self, webhook_url, events):
         """Register webhook."""
@@ -190,9 +83,13 @@ class PointSession():  # pylint: disable=too-many-instance-attributes
                 request_type="DELETE",
             )
 
-    async def update_webhook(self, webhook_url, webhook_id, events=None) -> ClientResponse | None:
+    async def update_webhook(
+        self, webhook_url, webhook_id, events=None
+    ) -> ClientResponse | None:
         """Register webhook (if it doesn't exit)."""
-        hooks = (await self.auth.request(MINUT_WEBHOOKS_URL, request_type="GET"))["hooks"]
+        hooks = (await self.auth.request(MINUT_WEBHOOKS_URL, request_type="GET"))[
+            "hooks"
+        ]
         try:
             self._webhook = next(hook for hook in hooks if hook["url"] == webhook_url)
             _LOGGER.debug("Webhook: %s, %s", self._webhook, webhook_id)
