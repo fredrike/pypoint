@@ -2,11 +2,11 @@
 
 from datetime import timedelta
 import logging
+
 from threading import RLock
 
-from authlib.integrations.httpx_client import AsyncOAuth2Client
-from authlib.oauth2.rfc6749.errors import MissingTokenException
-from httpx import HTTPError, NetworkError, RequestError, TimeoutException
+from aiohttp import ClientResponse, ClientSession
+from aiohttp.client_exceptions import ClientConnectionError,ClientResponseError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,92 +74,76 @@ EVENTS = {
     ),
 }
 
+from abc import ABC, abstractmethod
+from aiohttp import ClientSession, ClientResponse
 
-class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attributes
+
+class AbstractAuth(ABC):
+    """Abstract class to make authenticated requests."""
+
+    def __init__(self, websession: ClientSession):
+        """Initialize the auth."""
+        self.websession = websession
+
+
+    @abstractmethod
+    async def async_get_access_token(self) -> str:
+        """Return a valid access token."""
+
+    async def request(self, url, request_type="GET", **kwargs) -> ClientResponse:
+        """Send a request to the Minut Point API."""
+        headers = kwargs.get("headers")
+
+        if headers is None:
+            headers = {}
+        else:
+            headers = dict(headers)
+
+        access_token = await self.async_get_access_token()
+        headers["authorization"] = f"Bearer {access_token}"
+
+        try:
+            _LOGGER.debug("Request %s %s %s", url, kwargs, headers)
+            response = await self.websession.request(
+                request_type, url, **kwargs, timeout=TIMEOUT.seconds, headers=headers
+            )
+            response.raise_for_status()
+            resp = await response.json()
+            _LOGGER.log(
+                logging.NOTSET,
+                "Response %s %s %s",
+                response.status,
+                response.headers["content-type"],
+                resp.get("values")[-1]
+                if kwargs.get("data") and resp.get("values")
+                else response.text,
+            )
+            if "error" in resp:
+                raise RequestError(resp["error"], request=url)
+            return resp
+        except ClientConnectionError as error:
+            _LOGGER.error("Client issue: %s", error)
+
+
+class PointSession():  # pylint: disable=too-many-instance-attributes
     """Point Session class used by the devices."""
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
-        session,
-        client_id,
-        client_secret,
-        redirect_uri=None,
-        token=None,
-        token_saver=None,
-    ):
-        """Initialize the Minut Point Session object."""
-        super().__init__(
-            client_id,
-            client_secret,
-            auto_refresh_url=MINUT_TOKEN_URL,
-            redirect_uri=redirect_uri,
-            token_endpoint_auth_method="client_secret_basic",
-            token=token,
-        )
-        self.session = session
+        auth: AbstractAuth,
+    ) -> None:
+        """Initialize the Minut Point Session."""
+        self.auth = auth
         self._user = None
         self._webhook = {}
         self._device_state = {}
         self._homes = {}
         self._lock = RLock()
-        self.update_token = token_saver
         self.metadata = {"token_endpoint": MINUT_TOKEN_URL}
-
-    @property
-    def get_authorization_url(self):
-        """Return the authorization url."""
-        return self.create_authorization_url(MINUT_AUTH_URL)[0]
-
-    @property
-    def is_authorized(self):
-        """Return authorized status."""
-        return bool(self.token["access_token"])
-
-    async def get_access_token(self, code):
-        """Get new access token."""
-        try:
-            await super().fetch_token(
-                MINUT_TOKEN_URL,
-                client_id=self.client_id,
-                client_secret=self.client_secret,
-                grant_type="authorization_code",
-                code=code,
-            )
-        except MissingTokenException as error:
-            _LOGGER.warning("Token issues: %s", error)
-        return self.token
-
-    async def _request(self, url, request_type="GET", **params):
-        """Send a request to the Minut Point API."""
-        try:
-            _LOGGER.debug("Request %s %s", url, params)
-            response = await self.request(
-                request_type, url, timeout=TIMEOUT.seconds, **params
-            )
-            response.raise_for_status()
-            _LOGGER.log(
-                logging.NOTSET,
-                "Response %s %s %s",
-                response.status_code,
-                response.headers["content-type"],
-                response.json().get("values")[-1]
-                if params.get("data") and response.json().get("values")
-                else response.json(),
-            )
-            response = response.json()
-            if "error" in response:
-                raise RequestError(response["error"], request=url)
-            return response
-        except NetworkError as error:
-            _LOGGER.error("Network issue: %s", error)
-        except TimeoutException as error:
-            _LOGGER.error("Timeout issue: %s", error)
-        except HTTPError as error:
-            _LOGGER.error("Failed request: %s", error)
 
     async def _request_devices(self, url, _type):
         """Request list of devices."""
-        res = await self._request(url)
+        res = await self.auth.request(url)
         return res.get(_type) if res else {}
 
     async def read_sensor(self, device_id, sensor_uri):
@@ -177,18 +161,18 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
                 "value"
             ]
         url = MINUT_DEVICES_URL + f"/{device_id}/{sensor_uri}"
-        res = await self._request(url, request_type="GET", data={"limit": 1})
+        res = await self.auth.request(url, request_type="GET", data={"limit": 1})
         if not res or not res.get("values"):
             return None
         return res.get("values")[-1].get("value")
 
     async def user(self):
         """Update and returns the user data."""
-        return await self._request(f"{MINUT_USERS_URL}/{self.token['user_id']}")
+        return await self.auth.request(f"{MINUT_USERS_URL}/{self.token['user_id']}")
 
     async def _register_webhook(self, webhook_url, events):
         """Register webhook."""
-        response = await self._request(
+        response = await self.auth.request(
             MINUT_WEBHOOKS_URL,
             request_type="POST",
             json={
@@ -201,23 +185,26 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
     async def remove_webhook(self):
         """Remove webhook."""
         if self._webhook and self._webhook.get("hook_id"):
-            await self._request(
+            await self.auth.request(
                 f"{MINUT_WEBHOOKS_URL}/{self._webhook['hook_id']}",
                 request_type="DELETE",
             )
 
-    async def update_webhook(self, webhook_url, webhook_id, events=None):
+    async def update_webhook(self, webhook_url, webhook_id, events=None) -> ClientResponse | None:
         """Register webhook (if it doesn't exit)."""
-        hooks = (await self._request(MINUT_WEBHOOKS_URL, request_type="GET"))["hooks"]
+        hooks = (await self.auth.request(MINUT_WEBHOOKS_URL, request_type="GET"))["hooks"]
         try:
             self._webhook = next(hook for hook in hooks if hook["url"] == webhook_url)
             _LOGGER.debug("Webhook: %s, %s", self._webhook, webhook_id)
         except StopIteration:  # Not found
             if events is None:
                 events = [e for v in EVENTS.values() for e in v if e]
-            self._webhook = await self._register_webhook(webhook_url, events)
-            _LOGGER.debug("Registered hook: %s", self._webhook)
-            return self._webhook
+            try:
+                self._webhook = await self._register_webhook(webhook_url, events)
+                _LOGGER.debug("Registered hook: %s", self._webhook)
+                return self._webhook
+            except ClientResponseError:
+                return None
 
     @property
     def webhook(self):
@@ -258,7 +245,7 @@ class PointSession(AsyncOAuth2Client):  # pylint: disable=too-many-instance-attr
 
     async def _set_alarm(self, status, home_id):
         """Set alarm satus."""
-        response = await self._request(
+        response = await self.auth.request(
             f"{MINUT_HOMES_URL}/{home_id}",
             request_type="PUT",
             json={"alarm_status": status},

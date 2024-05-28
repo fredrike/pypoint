@@ -20,7 +20,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        "authlib",
-        "httpx>=0.19.0,<1",
+        "aiohttp",
     ],
 )
