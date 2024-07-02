@@ -46,9 +46,11 @@ class AbstractAuth(ABC):
                 "Response %s %s %s",
                 response.status,
                 response.headers["content-type"],
-                resp.get("values")[-1]
-                if kwargs.get("data") and resp.get("values")
-                else response.text,
+                (
+                    resp.get("values")[-1]
+                    if kwargs.get("data") and resp.get("values")
+                    else response.text
+                ),
             )
             if "error" in resp:
                 _LOGGER.error("Error for url: %s, %s", url, resp["error"])
