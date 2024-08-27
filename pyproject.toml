@@ -1,2 +1,20 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
 [project]
+description = "API for Minut Point"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = ["aiohttp"]
+name = "pypoint"
+version = "3.0.0"
 requires-python = ">= 3.11"
+readme = "README.md"
+authors = [{ name = "Fredrik Erlandsson", email = "fredrik.e@gmail.com" }]
+
+[project.urls]
+Repository = "https://github.com/fredrike/pypoint"

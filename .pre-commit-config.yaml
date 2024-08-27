@@ -1,22 +1,15 @@
 repos:
-  - repo: https://github.com/psf/black
-    rev: 23.9.1
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.6.2
     hooks:
-      - id: black
-        args:
-          - --safe
-          - --quiet
-        language_version: python3.11
-  - repo: https://github.com/PyCQA/flake8
-    rev: 6.1.0
-    hooks:
-    -   id: flake8
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
+    # Run the linter.
+    - id: ruff
+      args: [ --fix ]
+    # Run the formatter.
+    - id: ruff-format
   - repo: https://github.com/pycqa/pylint
-    rev: v3.0.0a7
+    rev: v3.2.6
     hooks:
       - id: pylint
         additional_dependencies:
