@@ -11,7 +11,7 @@ classifiers = [
 ]
 dependencies = ["aiohttp"]
 name = "pypoint"
-version = "3.0.0"
+version = "3.0.1"
 requires-python = ">= 3.11"
 readme = "README.md"
 authors = [{ name = "Fredrik Erlandsson", email = "fredrik.e@gmail.com" }]
