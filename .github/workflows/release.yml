@@ -30,6 +30,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install bump2version --user
+    - name: Configure Git
+      run: |
+        git config user.name "{{ $github.actor }}"
+        git config user.email '{{ $github.actor }}@users.noreply.github.com'
+
     - name: Bump Version
       id: version
       run: |
