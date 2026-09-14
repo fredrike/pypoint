@@ -1,7 +1,7 @@
 """Abstract class to make authenticated requests."""
 
-from abc import ABC, abstractmethod
 import logging
+from abc import ABC, abstractmethod
 
 from aiohttp import ClientResponse, ClientSession
 from aiohttp.client_exceptions import ClientConnectionError
