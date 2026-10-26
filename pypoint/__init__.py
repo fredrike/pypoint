@@ -43,7 +43,8 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
         if device_id in self._device_state and sensor_uri in self._device_state[
             device_id
         ].get("latest_sensor_values", {}):
-            _LOGGER.debug(
+            _LOGGER.log(
+                logging.NOTSET,
                 "Cached sensor value for %s: %s",
                 sensor_uri,
                 self._device_state[device_id]["latest_sensor_values"][sensor_uri],
@@ -99,7 +100,7 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
         hooks = hooks_response.get("hooks", []) if hooks_response else []
         try:
             self._webhook = next(hook for hook in hooks if hook["url"] == webhook_url)
-            _LOGGER.debug("Webhook: %s, %s", self._webhook, webhook_id)
+            _LOGGER.log(logging.NOTSET, "Webhook: %s, %s", self._webhook, webhook_id)
         except StopIteration:
             if events is None:
                 events = [
@@ -107,7 +108,7 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
                 ]
             try:
                 self._webhook = await self._register_webhook(webhook_url, events)
-                _LOGGER.debug("Registered hook: %s", self._webhook)
+                _LOGGER.log(logging.NOTSET, "Registered hook: %s", self._webhook)
                 return self._webhook
             except ClientResponseError:
                 return None
@@ -124,7 +125,8 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
 
             if devices:
                 self._device_state = {device["device_id"]: device for device in devices}
-                _LOGGER.debug(
+                _LOGGER.log(
+                    logging.NOTSET,
                     "Found devices: %s",
                     [
                         {key: self._device_state[key]["description"]}
@@ -134,7 +136,8 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
                 homes = await self._request_devices(MINUT_HOMES_URL, "homes")
                 if homes:
                     self._homes = homes
-                    _LOGGER.debug(
+                    _LOGGER.log(
+                        logging.NOTSET,
                         "Found homes: %s",
                         [{home["home_id"]: home["name"]} for home in self._homes],
                     )
@@ -201,7 +204,7 @@ class Device:
 
     async def sensor(self, sensor_type):
         """Update and return sensor value."""
-        _LOGGER.debug("Reading %s sensor.", sensor_type)
+        _LOGGER.log(logging.NOTSET, "Reading %s sensor.", sensor_type)
         return await self._session.read_sensor(self.device_id, sensor_type)
 
     @property
