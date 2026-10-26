@@ -2,6 +2,7 @@
 
 import logging
 from threading import RLock
+from typing import Any
 
 from aiohttp import ClientResponse
 from aiohttp.client_exceptions import ClientResponseError
@@ -22,30 +23,28 @@ _LOGGER = logging.getLogger(__name__)
 class PointSession:  # pylint: disable=too-many-instance-attributes
     """Point Session class used by the devices."""
 
-    def __init__(
-        self,
-        auth: AbstractAuth,
-    ) -> None:
+    def __init__(self, auth: AbstractAuth) -> None:
         """Initialize the Minut Point Session."""
         self.auth = auth
         self._user = None
-        self._webhook = {}
-        self._device_state = {}
-        self._homes = {}
+        self._webhook: dict[str, Any] = {}
+        self._device_state: dict[str, Any] = {}
+        self._homes: list[dict[str, Any]] = []
         self._lock = RLock()
 
-    async def _request_devices(self, url, _type):
+    async def _request_devices(self, url: str, device_type: str) -> dict[str, Any]:
         """Request list of devices."""
         res = await self.auth.request(url)
-        return res.get(_type) if res else {}
+        return res.get(device_type) if res else {}
 
-    async def read_sensor(self, device_id, sensor_uri):
+    async def read_sensor(self, device_id: str, sensor_uri: str) -> Any:
         """Return sensor value based on sensor_uri."""
         sensor_uri = MAP_SENSORS.get(sensor_uri, sensor_uri)
         if device_id in self._device_state and sensor_uri in self._device_state[
             device_id
         ].get("latest_sensor_values", {}):
-            _LOGGER.debug(
+            _LOGGER.log(
+                logging.NOTSET,
                 "Cached sensor value for %s: %s",
                 sensor_uri,
                 self._device_state[device_id]["latest_sensor_values"][sensor_uri],
@@ -53,17 +52,22 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
             return self._device_state[device_id]["latest_sensor_values"][sensor_uri][
                 "value"
             ]
-        url = MINUT_DEVICES_URL + f"/{device_id}/{sensor_uri}"
+
+        url = f"{MINUT_DEVICES_URL}/{device_id}/{sensor_uri}"
         res = await self.auth.request(url, request_type="GET", data={"limit": 1})
         if not res or not res.get("values"):
             return None
         return res.get("values")[-1].get("value")
 
-    async def user(self):
-        """Update and returns the user data."""
+    async def user(self) -> dict[str, Any] | None:
+        """Update and return the user data."""
         return await self.auth.request(MINUT_USER_URL)
 
-    async def _register_webhook(self, webhook_url, events):
+    async def _register_webhook(
+        self,
+        webhook_url: str,
+        events: list[str],
+    ) -> dict[str, Any]:
         """Register webhook."""
         response = await self.auth.request(
             MINUT_WEBHOOKS_URL,
@@ -73,9 +77,11 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
                 "events": events,
             },
         )
+        if response is None:
+            return {}
         return response
 
-    async def remove_webhook(self):
+    async def remove_webhook(self) -> None:
         """Remove webhook."""
         if self._webhook and self._webhook.get("hook_id"):
             await self.auth.request(
@@ -84,21 +90,25 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
             )
 
     async def update_webhook(
-        self, webhook_url, webhook_id, events=None
+        self,
+        webhook_url: str,
+        webhook_id: str,
+        events: list[str] | None = None,
     ) -> ClientResponse | None:
-        """Register webhook (if it doesn't exit)."""
-        hooks = (await self.auth.request(MINUT_WEBHOOKS_URL, request_type="GET"))[
-            "hooks"
-        ]
+        """Register webhook (if it doesn't exist)."""
+        hooks_response = await self.auth.request(MINUT_WEBHOOKS_URL, request_type="GET")
+        hooks = hooks_response.get("hooks", []) if hooks_response else []
         try:
             self._webhook = next(hook for hook in hooks if hook["url"] == webhook_url)
-            _LOGGER.debug("Webhook: %s, %s", self._webhook, webhook_id)
-        except StopIteration:  # Not found
+            _LOGGER.log(logging.NOTSET, "Webhook: %s, %s", self._webhook, webhook_id)
+        except StopIteration:
             if events is None:
-                events = [e for v in EVENTS.values() for e in v if e]
+                events = [
+                    event for value in EVENTS.values() for event in value if event
+                ]
             try:
                 self._webhook = await self._register_webhook(webhook_url, events)
-                _LOGGER.debug("Registered hook: %s", self._webhook)
+                _LOGGER.log(logging.NOTSET, "Registered hook: %s", self._webhook)
                 return self._webhook
             except ClientResponseError:
                 return None
@@ -115,17 +125,19 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
 
             if devices:
                 self._device_state = {device["device_id"]: device for device in devices}
-                _LOGGER.debug(
+                _LOGGER.log(
+                    logging.NOTSET,
                     "Found devices: %s",
                     [
-                        {k: self._device_state[k]["description"]}
-                        for k in self._device_state
+                        {key: self._device_state[key]["description"]}
+                        for key in self._device_state
                     ],
                 )
                 homes = await self._request_devices(MINUT_HOMES_URL, "homes")
                 if homes:
                     self._homes = homes
-                    _LOGGER.debug(
+                    _LOGGER.log(
+                        logging.NOTSET,
                         "Found homes: %s",
                         [{home["home_id"]: home["name"]} for home in self._homes],
                     )
@@ -134,26 +146,24 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
     @property
     def homes(self):
         """Return all known homes."""
-        return {
-            home["home_id"]: home
-            for home in self._homes
-            if "alarm_status" in home
-        }
+        return {home["home_id"]: home for home in self._homes if "alarm_status" in home}
 
-    async def _set_alarm(self, status, home_id):
-        """Set alarm satus."""
+    async def _set_alarm(self, status: str, home_id: str) -> bool:
+        """Set alarm status."""
         response = await self.auth.request(
             f"{MINUT_HOMES_URL}/{home_id}",
             request_type="PUT",
             json={"alarm_status": status},
         )
+        if not response:
+            return False
         return response.get("alarm_status", "") == status
 
-    async def alarm_arm(self, home_id):
+    async def alarm_arm(self, home_id: str) -> bool:
         """Arm alarm."""
         return await self._set_alarm("on", home_id)
 
-    async def alarm_disarm(self, home_id):
+    async def alarm_disarm(self, home_id: str) -> bool:
         """Disarm alarm."""
         return await self._set_alarm("off", home_id)
 
@@ -162,10 +172,10 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
         """Request representations of all devices."""
         return (self.device(device_id) for device_id in self.device_ids)
 
-    def device(self, device_id):
+    def device(self, device_id: str):
         """Return a device object."""
         if len(device_id) == 1:
-            raise ValueError("Device id has len 1 ({})".format(device_id))
+            raise ValueError(f"Device id has len 1 ({device_id})")
         return Device(self, device_id)
 
     @property
@@ -174,8 +184,8 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
         with self._lock:
             return self._device_state.keys()
 
-    def device_raw(self, device_id):
-        """Return the raw representaion of a device."""
+    def device_raw(self, device_id: str):
+        """Return the raw representation of a device."""
         with self._lock:
             return self._device_state.get(device_id)
 
@@ -189,12 +199,12 @@ class Device:
         self._device_id = device_id
 
     def __str__(self):
-        """Representaion of device."""
+        """Representation of device."""
         return f"Device #{self.device_id} {self.name or ''}"
 
     async def sensor(self, sensor_type):
         """Update and return sensor value."""
-        _LOGGER.debug("Reading %s sensor.", sensor_type)
+        _LOGGER.log(logging.NOTSET, "Reading %s sensor.", sensor_type)
         return await self._session.read_sensor(self.device_id, sensor_type)
 
     @property
@@ -257,3 +267,172 @@ class Device:
     async def remove_webhook(self):
         """Remove the session webhook."""
         return await self._session.remove_webhook()
+
+    @property
+    def humidity(self):
+        """Humidity level of device."""
+        return self.device["humidity"]
+
+    @property
+    def temperature(self):
+        """Temperature level of device."""
+        return self.device["temperature"]
+
+    @property
+    def pressure(self):
+        """Pressure level of device."""
+        return self.device["pressure"]
+
+    @property
+    def battery(self):
+        """Battery status of device."""
+        return self.device["battery"]
+
+    @property
+    def status(self):
+        """Status of device."""
+        return self.device["status"]
+
+    @property
+    def active(self):
+        """Active state of device."""
+        return self.device["active"]
+
+    @property
+    def offline(self):
+        """Offline state of device."""
+        return self.device["offline"]
+
+    @property
+    def last_seen(self):
+        """Last seen time of device."""
+        return self.device["last_heard_from_at"]
+
+    @property
+    def model(self):
+        """Model of device."""
+        return self.device["model"]
+
+    @property
+    def firmware(self):
+        """Firmware version of device."""
+        return self.device["firmware"]
+
+    @property
+    def webhook_url(self):
+        """Webhook url of device."""
+        return self.device.get("webhook_url")
+
+    async def update(self):
+        """Update device data."""
+        return await self._session.update()
+
+    async def sensor_values(self):
+        """Return sensor values of device."""
+        return await self._session.read_sensor(self.device_id, "sensor_values")
+
+    async def event(self, event_type):
+        """Return device event state."""
+        return await self._session.read_sensor(self.device_id, event_type)
+
+    async def trigger(self):
+        """Trigger a device action."""
+        return await self._session.auth.request(
+            f"{MINUT_DEVICES_URL}/{self.device_id}/trigger",
+            request_type="POST",
+        )
+
+    async def set_alarm(self, status):
+        """Set alarm state."""
+        return await self._session._set_alarm(status, self.device_id)
+
+    async def alarm_arm(self):
+        """Arm alarm for the device."""
+        return await self._session.alarm_arm(self.device_id)
+
+    async def alarm_disarm(self):
+        """Disarm alarm for the device."""
+        return await self._session.alarm_disarm(self.device_id)
+
+    @property
+    def device_id(self):
+        """Device id."""
+        return self._device_id
+
+    @property
+    def name(self):
+        """Device name."""
+        return self.device.get("description")
+"""Abstract class to make authenticated requests."""
+
+import logging
+from abc import ABC, abstractmethod
+from typing import Any
+
+from aiohttp import ClientSession
+from aiohttp.client_exceptions import ClientConnectionError
+
+from .const import TIMEOUT
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class AbstractAuth(ABC):
+    """Abstract class to make authenticated requests."""
+
+    def __init__(self, websession: ClientSession) -> None:
+        """Initialize the auth."""
+        self.websession = websession
+
+    @abstractmethod
+    async def async_get_access_token(self) -> str:
+        """Return a valid access token."""
+
+    async def request(
+        self,
+        url: str,
+        request_type: str = "GET",
+        **kwargs: Any,
+    ) -> dict[str, Any] | None:
+        """Send a request to the Minut Point API."""
+        request_kwargs = dict(kwargs)
+        headers = dict(request_kwargs.pop("headers", {}) or {})
+
+        access_token = await self.async_get_access_token()
+        headers["authorization"] = f"Bearer {access_token}"
+
+        try:
+            _LOGGER.debug("Request %s %s %s", url, request_kwargs, headers)
+            response = await self.websession.request(
+                request_type,
+                url,
+                timeout=TIMEOUT.seconds,
+                headers=headers,
+                **request_kwargs,
+            )
+            response.raise_for_status()
+
+            try:
+                resp = await response.json()
+            except ValueError:
+                return None
+
+            if not isinstance(resp, dict):
+                return None
+
+            _LOGGER.log(
+                logging.NOTSET,
+                "Response %s %s",
+                response.status,
+                response.headers.get("content-type"),
+            )
+
+            if "error" in resp:
+                _LOGGER.error("Error for url: %s, %s", url, resp["error"])
+            return resp
+        except ClientConnectionError as error:
+            _LOGGER.error("Client issue: %s", error)
+            return None
+
+
+"}, {
