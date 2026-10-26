@@ -102,7 +102,9 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
             _LOGGER.debug("Webhook: %s, %s", self._webhook, webhook_id)
         except StopIteration:
             if events is None:
-                events = [event for value in EVENTS.values() for event in value if event]
+                events = [
+                    event for value in EVENTS.values() for event in value if event
+                ]
             try:
                 self._webhook = await self._register_webhook(webhook_url, events)
                 _LOGGER.debug("Registered hook: %s", self._webhook)
@@ -141,11 +143,7 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
     @property
     def homes(self):
         """Return all known homes."""
-        return {
-            home["home_id"]: home
-            for home in self._homes
-            if "alarm_status" in home
-        }
+        return {home["home_id"]: home for home in self._homes if "alarm_status" in home}
 
     async def _set_alarm(self, status: str, home_id: str) -> bool:
         """Set alarm status."""
