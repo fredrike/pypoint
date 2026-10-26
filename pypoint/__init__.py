@@ -165,7 +165,7 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
     def device(self, device_id):
         """Return a device object."""
         if len(device_id) == 1:
-            raise ValueError("Device id has len 1 (%s)", device_id)
+            raise ValueError("Device id has len 1 (%s)" % device_id)
         return Device(self, device_id)
 
     @property
