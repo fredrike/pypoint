@@ -137,7 +137,7 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
         return {
             home["home_id"]: home
             for home in self._homes
-            if "alarm_status" in home.keys()
+            if "alarm_status" in home
         }
 
     async def _set_alarm(self, status, home_id):
