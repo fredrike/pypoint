@@ -134,11 +134,7 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
     @property
     def homes(self):
         """Return all known homes."""
-        return {
-            home["home_id"]: home
-            for home in self._homes
-            if "alarm_status" in home
-        }
+        return {home["home_id"]: home for home in self._homes if "alarm_status" in home}
 
     async def _set_alarm(self, status, home_id):
         """Set alarm satus."""
@@ -165,7 +161,7 @@ class PointSession:  # pylint: disable=too-many-instance-attributes
     def device(self, device_id):
         """Return a device object."""
         if len(device_id) == 1:
-            raise ValueError("Device id has len 1 ({})".format(device_id))
+            raise ValueError(f"Device id has len 1 ({device_id})")
         return Device(self, device_id)
 
     @property
