@@ -55,7 +55,8 @@ class AbstractAuth(ABC):
             if not isinstance(resp, dict):
                 return None
 
-            _LOGGER.debug(
+            _LOGGER.log(
+                logging.NOTSET,
                 "Response %s %s",
                 response.status,
                 response.headers.get("content-type"),
