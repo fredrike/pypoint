@@ -18,3 +18,10 @@ authors = [{ name = "Fredrik Erlandsson", email = "fredrik.e@gmail.com" }]
 
 [project.urls]
 Repository = "https://github.com/fredrike/pypoint"
+
+[tool.bumpversion]
+commit = true
+tag = true
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
