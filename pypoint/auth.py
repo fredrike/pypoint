@@ -2,8 +2,9 @@
 
 import logging
 from abc import ABC, abstractmethod
+from typing import Any
 
-from aiohttp import ClientResponse, ClientSession
+from aiohttp import ClientSession
 from aiohttp.client_exceptions import ClientConnectionError
 
 from .const import TIMEOUT
@@ -14,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 class AbstractAuth(ABC):
     """Abstract class to make authenticated requests."""
 
-    def __init__(self, websession: ClientSession):
+    def __init__(self, websession: ClientSession) -> None:
         """Initialize the auth."""
         self.websession = websession
 
@@ -22,36 +23,48 @@ class AbstractAuth(ABC):
     async def async_get_access_token(self) -> str:
         """Return a valid access token."""
 
-    async def request(self, url, request_type="GET", **kwargs) -> ClientResponse:
+    async def request(
+        self,
+        url: str,
+        request_type: str = "GET",
+        **kwargs: Any,
+    ) -> dict[str, Any] | None:
         """Send a request to the Minut Point API."""
-        headers = kwargs.get("headers")
-
-        if headers is None:
-            headers = {}
-        else:
-            headers = dict(headers)
+        request_kwargs = dict(kwargs)
+        headers = dict(request_kwargs.pop("headers", {}) or {})
 
         access_token = await self.async_get_access_token()
         headers["authorization"] = f"Bearer {access_token}"
 
         try:
-            _LOGGER.debug("Request %s %s %s", url, kwargs, headers)
+            _LOGGER.debug("Request %s %s %s", url, request_kwargs, headers)
             response = await self.websession.request(
-                request_type, url, **kwargs, timeout=TIMEOUT.seconds, headers=headers
+                request_type,
+                url,
+                timeout=TIMEOUT.seconds,
+                headers=headers,
+                **request_kwargs,
             )
             response.raise_for_status()
-            resp = await response.json()
+
+            try:
+                resp = await response.json()
+            except ValueError:
+                return None
+
+            if not isinstance(resp, dict):
+                return None
+
             _LOGGER.log(
                 logging.NOTSET,
-                "Response %s %s %s",
+                "Response %s %s",
                 response.status,
-                response.headers["content-type"],
-                resp.get("values")[-1]
-                if kwargs.get("data") and resp.get("values")
-                else response.text,
+                response.headers.get("content-type"),
             )
+
             if "error" in resp:
                 _LOGGER.error("Error for url: %s, %s", url, resp["error"])
             return resp
         except ClientConnectionError as error:
             _LOGGER.error("Client issue: %s", error)
+            return None
